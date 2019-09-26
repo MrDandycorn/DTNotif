@@ -1,25 +1,30 @@
 import requests
 import json
 import time
-from credentials import vkPersUserID, vkPersKey, vkStreamOwnerID, twitchKeyToken, vkBroadcastToken, vkWorkBroadcastID, twitchClient, streamerIds
+from credentials import vkPersKey, vkStreamOwnerID, twitchKeyToken, vkBroadcastToken, vkWorkBroadcastID, twitchClient, streamerIds,\
+    vkTestBroadcastID, vkTestOwnerID, dev
 
+dev = True
+streamerIds.append('22245684')
 uptimes = [0.0] * len(streamerIds)
-flags = [True] * len(streamerIds)
+flags = [False] * len(streamerIds) if dev else [True] * len(streamerIds)
 timeout = [0] * len(streamerIds)
 i = 1
 twitchKey = requests.get('http://twitch.center/customapi/quote?token=' + twitchKeyToken + '&data=1&no_id=1')
 twitchKey = twitchKey.text
+broadcastID = vkTestBroadcastID if dev else vkWorkBroadcastID
+ownerID = vkTestOwnerID if dev else vkStreamOwnerID
 
 
 def vkPost(payload):
     vkReq = requests.get(requests.Request('GET', 'https://api.vk.com/method/wall.post', params=payload).prepare().url)
     print(vkReq.text)
     tempdict = vkReq.json()
-    postID = tempdict.get('response').get('post_id')
-    data = {'message': {'attachment': 'wall' + vkPersUserID + '_' + str(postID)}}
+    postID = tempdict['response']['post_id']
+    data = {'message': {'attachment': 'wall' + ownerID + '_' + str(postID)}}
     headers = {'content-type': 'application/json'}
     r = requests.post(
-        'https://broadcast.vkforms.ru/api/v2/broadcast?token=' + vkBroadcastToken + '&list_ids=' + vkWorkBroadcastID + '&run_now=1',
+        'https://broadcast.vkforms.ru/api/v2/broadcast?token=' + vkBroadcastToken + '&list_ids=' + broadcastID + '&run_now=1',
         data=json.dumps(data), headers=headers)
     if r.status_code == requests.codes.ok:
         print('Broadcast Successful')
@@ -76,9 +81,7 @@ def twitchRequest():
                     uptimes[i] = float(uptimeTemp.read())
                     uptimeTemp.close()
                     if uptimes[i] != 0:
-                        print('Set ' + streamerIds[i] + ' uptime to ' + time.strftime("%H:%M:%S",
-                                                                                      time.gmtime(
-                                                                                          time.time() - uptimes[i])))
+                        print('Set ' + streamerIds[i] + ' uptime to ' + time.strftime("%H:%M:%S", time.gmtime(time.time() - uptimes[i])))
                 if not flags[i]:
                     if timeout[i] != 0:
                         print(streamerIds[i] + ' resumed streaming')
@@ -96,7 +99,7 @@ def twitchRequest():
                             game = game.get('name')
                         except IndexError:
                             game = ''
-                        payload = {'owner_id': vkStreamOwnerID, 'access_token': vkPersKey, 'v': '5.95',
+                        payload = {'owner_id': ownerID, 'access_token': vkPersKey, 'v': '5.95',
                                    'from_group': '1',
                                    'message': name + ' сейчас стримит ' + game + ' на https://twitch.tv/' + name.lower(),
                                    'attachments': 'https://twitch.tv/' + name.lower()}
