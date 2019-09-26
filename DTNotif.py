@@ -4,8 +4,6 @@ import time
 from credentials import vkPersKey, vkStreamOwnerID, twitchKeyToken, vkBroadcastToken, vkWorkBroadcastID, twitchClient, streamerIds,\
     vkTestBroadcastID, vkTestOwnerID, dev
 
-dev = True
-streamerIds.append('22245684')
 uptimes = [0.0] * len(streamerIds)
 flags = [False] * len(streamerIds) if dev else [True] * len(streamerIds)
 timeout = [0] * len(streamerIds)
