@@ -1,7 +1,7 @@
 import requests
 import json
 import time
-from credentials import vkPersKey, vkStreamOwnerID, twitchKeyToken, vkBroadcastToken, vkWorkBroadcastID, twitchClient, streamerIds,\
+from credentials import vkPersKey, vkStreamBotKey, vkStreamOwnerID, twitchKeyToken, vkBroadcastToken, vkWorkBroadcastID, twitchClient, streamerIds,\
     vkTestBroadcastID, vkTestOwnerID, dev
 
 uptimes = [0.0] * len(streamerIds)
@@ -41,7 +41,7 @@ def postStartTime(startTime, userID, userNum):
 def sendUptime(userID, startTime):
     uptime = time.time() - startTime - 300
     formatted = time.strftime("%H:%M:%S", time.gmtime(uptime))
-    payload = {'access_token': vkBroadcastToken, 'v': '5.80',
+    payload = {'access_token': vkStreamBotKey, 'v': '5.80',
                'message': getUserName(userID) + ' стримил ' + formatted,
                'chat_id': '1'}
     r = requests.get('https://api.vk.com/method/messages.send', params=payload)
