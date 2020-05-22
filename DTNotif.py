@@ -1,26 +1,70 @@
-import requests
 import json
 import time
+from asyncio import sleep
 from credentials import vk_personal_token, vk_stream_bot_token, vk_stream_bot_owner_id, vk_broadcast_token, vk_broadcast_id, vk_dev_broadcast_id, twitch_client, \
-    streamer_ids, vk_test_bot_owner_id, dev, twitch_token
+    streamer_ids, vk_test_bot_owner_id, dev, twitch_token, vk_personal_user_id
 from os import path
-from random import getrandbits
+from vk_botting import Bot, when_mentioned
 
 uptimes = [0.0] * len(streamer_ids)
 flags = [False] * len(streamer_ids) if dev else [True] * len(streamer_ids)
 timeout = [0] * len(streamer_ids)
 broadcast_id = vk_dev_broadcast_id if dev else vk_broadcast_id
 owner_id = vk_test_bot_owner_id if dev else vk_stream_bot_owner_id
+tech = vk_personal_user_id if dev else 2000000001
 
 
-def make_vk_post(name, game):
-    payload = {'owner_id': owner_id,
-               'access_token': vk_personal_token,
-               'v': '5.103',
-               'from_group': '1',
-               'message': f'{name} сейчас стримит {game} на https://twitch.tv/{name.lower()}',
-               'attachments': 'https://twitch.tv/' + name.lower()}
-    vk_post = requests.get('https://api.vk.com/method/wall.post', params=payload).json()
+dtguild = Bot(command_prefix=when_mentioned, case_insensitive=True)
+
+
+@dtguild.listen()
+async def on_ready():
+    await dtguild.attach_user_token(vk_personal_token)
+    await dtguild.loop.create_task(twitch_loop())
+    print(f'Logged in as {dtguild.group.name}')
+
+
+@dtguild.listen()
+async def on_wall_reply_new(comment):
+    user = await dtguild.get_page(comment.from_id, name_case='gen')
+    return await dtguild.send_message(tech, f'Новый комментарий от {user.mention}', attachment=f'wall-{dtguild.group.id}_{comment.id}')
+
+
+@dtguild.listen()
+async def on_wall_post_new(post):
+    user = await dtguild.get_user(post.from_id, name_case='gen')
+    await dtguild.send_message(tech, f'Новый пост от {user.mention}', attachment=f'wall-{dtguild.group.id}_{post.id}')
+    params = {
+        'token': vk_broadcast_token,
+        'run_now': 1
+    }
+    data = json.dumps({'message': {'attachment': f'wall-{dtguild.group.id}_{post.id}'}})
+    if '#dtguild_новости' in post.text.lower():
+        params['list_id'] = 437143
+    elif '#dtguild_анонс' in post.text.lower():
+        params['list_id'] = 437141
+    elif '#dtguild_оффтоп' in post.text.lower():
+        params['list_id'] = 489597
+    else:
+        return
+    await dtguild.session.post('https://broadcast.vkforms.ru/api/v2/broadcast', params=params, data=data)
+
+
+@dtguild.listen()
+async def on_message_new(msg):
+    if msg.from_id == msg.peer_id:
+        user = await dtguild.get_user(msg.from_id, name_case='gen')
+        return await dtguild.send_message(tech, f'Новое сообщение от {user.mention}', forward_messages=msg.id)
+
+
+@dtguild.listen()
+async def on_group_join(user, _):
+    return await dtguild.send_message(tech, f'Новый подписчик в группе: {user.mention}')
+
+
+async def make_vk_post(name, game):
+    vk_post = await dtguild.user_vk_request('wall.post', message=f'{name} сейчас стримит {game} на https://twitch.tv/{name.lower()}',
+                                            attachments='https://twitch.tv/' + name.lower(), from_group=1, owner_id=owner_id)
     post_id = vk_post['response']['post_id']
     data = {'message': {'attachment': f'wall{owner_id}_{post_id}'}}
     headers = {'content-type': 'application/json'}
@@ -29,7 +73,7 @@ def make_vk_post(name, game):
         'list_ids': broadcast_id,
         'run_now': 1
     }
-    requests.post('https://broadcast.vkforms.ru/api/v2/broadcast', params=broadcast_params, data=json.dumps(data), headers=headers)
+    await dtguild.session.post('https://broadcast.vkforms.ru/api/v2/broadcast', params=broadcast_params, data=json.dumps(data), headers=headers)
 
 
 def post_start_time(start_time, user_id, user_num):
@@ -38,30 +82,28 @@ def post_start_time(start_time, user_id, user_num):
         uptime.write(str(start_time))
 
 
-def send_uptime(user_id, start_time):
+async def send_uptime(user_id, start_time):
     uptime = time.time() - start_time - 300
     formatted = time.strftime("%H:%M:%S", time.gmtime(uptime))
-    payload = {'access_token': vk_stream_bot_token,
-               'v': '5.103',
-               'message': f'{get_username(user_id)} стримил {formatted}',
-               'chat_id': 1,
-               'random_id': getrandbits(64)}
-    requests.get('https://api.vk.com/method/messages.send', params=payload)
+    name = await get_username(user_id)
+    await dtguild.send_message(tech, f'{name} стримил {formatted}')
 
 
-def get_username(user_id):
+async def get_username(user_id):
     headers = {'Authorization': 'Bearer ' + twitch_token, 'Client-ID': twitch_client}
     params = {'id': user_id}
-    response = requests.get('https://api.twitch.tv/helix/users', params=params, headers=headers).json()
+    response = await dtguild.session.get('https://api.twitch.tv/helix/users', params=params, headers=headers)
+    response = await response.json()
     return response['data'][0]['display_name']
 
 
-def twitch_request():
+async def twitch_request():
     url = 'https://api.twitch.tv/helix/streams?user_id' + '&user_id='.join(streamer_ids)
     headers = {'Authorization': 'Bearer ' + twitch_token, 'Client-ID': twitch_client}
-    res = requests.get(url, headers=headers).json()['data']
+    res = await dtguild.session.get(url, headers=headers)
+    res = await res.json()
     info = {}
-    for stream in res:
+    for stream in res['data']:
         info[stream['user_id']] = stream
     for i, streamer in enumerate(streamer_ids):
         print(streamer)
@@ -82,14 +124,15 @@ def twitch_request():
                         flags[i] = True
                     else:
                         streamer_info = streamer_info[0]
-                        name = get_username(streamer)
+                        name = await get_username(streamer)
                         print(name + ' started streaming')
                         gameid = streamer_info.get('game_id')
                         try:
-                            game = requests.get('https://api.twitch.tv/helix/games?id=' + gameid, headers=headers).json()['data'][0]['name']
+                            game = await dtguild.session.get('https://api.twitch.tv/helix/games?id=' + gameid, headers=headers)
+                            game = (await game.json())['data'][0]['name']
                         except (IndexError, KeyError):
                             game = ''
-                        make_vk_post(name, game)
+                        await make_vk_post(name, game)
                         flags[i] = True
                         post_start_time(time.time(), streamer, i)
             elif not streamer_info and flags[i]:
@@ -102,7 +145,7 @@ def twitch_request():
                     if timeout[i] > 5:
                         timeout[i] = 0
                         if uptimes[i] != 0:
-                            print(send_uptime(streamer, uptimes[i]))
+                            await send_uptime(streamer, uptimes[i])
                     else:
                         timeout[i] += 1
                 else:
@@ -111,6 +154,10 @@ def twitch_request():
             print('Error: ' + str(r))
 
 
-while True:
-    twitch_request()
-    time.sleep(60)
+async def twitch_loop():
+    while True:
+        await twitch_request()
+        await sleep(60)
+
+
+dtguild.run(vk_stream_bot_token)
