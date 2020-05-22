@@ -40,11 +40,11 @@ async def on_wall_post_new(post):
     }
     data = json.dumps({'message': {'attachment': f'wall-{dtguild.group.id}_{post.id}'}})
     if '#dtguild_новости' in post.text.lower():
-        params['list_id'] = 437143
+        params['list_ids'] = 437143
     elif '#dtguild_анонс' in post.text.lower():
-        params['list_id'] = 437141
+        params['list_ids'] = 437141
     elif '#dtguild_оффтоп' in post.text.lower():
-        params['list_id'] = 489597
+        params['list_ids'] = 489597
     else:
         return
     await dtguild.session.post('https://broadcast.vkforms.ru/api/v2/broadcast', params=params, data=data)
