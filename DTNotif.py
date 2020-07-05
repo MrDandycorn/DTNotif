@@ -5,6 +5,7 @@ from credentials import vk_personal_token, vk_stream_bot_token, vk_stream_bot_ow
     streamer_ids, vk_test_bot_owner_id, dev, twitch_token, vk_personal_user_id
 from os import path
 from vk_botting import Bot, when_mentioned
+from traceback import print_exc
 
 uptimes = [0.0] * len(streamer_ids)
 flags = [False] * len(streamer_ids) if dev else [True] * len(streamer_ids)
@@ -12,7 +13,6 @@ timeout = [0] * len(streamer_ids)
 broadcast_id = vk_dev_broadcast_id if dev else vk_broadcast_id
 owner_id = vk_test_bot_owner_id if dev else vk_stream_bot_owner_id
 tech = vk_personal_user_id if dev else 2000000001
-
 
 dtguild = Bot(command_prefix=when_mentioned, case_insensitive=True)
 
@@ -32,7 +32,7 @@ async def on_wall_reply_new(comment):
 
 @dtguild.listen()
 async def on_wall_post_new(post):
-    user = await dtguild.get_user(post.from_id, name_case='gen')
+    user = await dtguild.get_user(post.created_by, name_case='gen')
     await dtguild.send_message(tech, f'Новый пост от {user.mention}', attachment=f'wall-{dtguild.group.id}_{post.id}')
     params = {
         'token': vk_broadcast_token,
@@ -123,7 +123,6 @@ async def twitch_request():
                         timeout[i] = 0
                         flags[i] = True
                     else:
-                        streamer_info = streamer_info[0]
                         name = await get_username(streamer)
                         print(name + ' started streaming')
                         gameid = streamer_info.get('game_id')
@@ -151,7 +150,8 @@ async def twitch_request():
                 else:
                     post_start_time(0, streamer, i)
         except Exception as r:
-            print('Error: ' + str(r))
+            print(f'Error: {r}')
+            print_exc()
 
 
 async def twitch_loop():
